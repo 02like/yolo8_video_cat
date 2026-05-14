@@ -98,7 +98,7 @@ def main():
     out = cv2.VideoWriter(OUTPUT_VIDEO, fourcc, fps, (frame_w, frame_h))
 
     color_votes = defaultdict(list)
-    id_to_type = {}
+    cls_votes = defaultdict(list)  # 类型投票，纠正偶发误判
 
     print(f"检测 + 跟踪: YOLOv8n + ByteTrack (Ultralytics)")
     print(f"视频: {VIDEO_PATH}")
@@ -125,17 +125,26 @@ def main():
             bboxes = boxes_data.xyxy.tolist()
             cls_ids = boxes_data.cls.int().tolist()
 
-            for tid, bbox, cls_id in zip(track_ids, bboxes, cls_ids):
+            confs = boxes_data.conf.tolist()
+            for tid, bbox, cls_id, conf in zip(track_ids, bboxes, cls_ids, confs):
                 x1, y1, x2, y2 = map(int, bbox)
+
+                # 纠正水泥罐车等特殊车辆被误判为公交车
+                if cls_id == 5:  # bus
+                    w, h = x2 - x1, y2 - y1
+                    aspect_ratio = w / h if h > 0 else 0
+                    if conf < 0.5 or aspect_ratio < 1.7:
+                        cls_id = 3  # 改判为"其他"
+
                 roi = frame[y1:y2, x1:x2]
                 color = classify_color(roi)
                 color_votes[tid].append(color)
-
-                if tid not in id_to_type:
-                    id_to_type[tid] = VEHICLE_CLASSES.get(cls_id, "其他")
+                cls_votes[tid].append(cls_id)
 
                 final_color = CollectionsCounter(color_votes[tid]).most_common(1)[0][0]
-                label = f"#{tid} {final_color} {id_to_type[tid]}"
+                final_cls = CollectionsCounter(cls_votes[tid]).most_common(1)[0][0]
+                vtype = VEHICLE_CLASSES.get(final_cls, "其他")
+                label = f"#{tid} {final_color} {vtype}"
 
                 color_map = {"白色": (255, 255, 255), "黑色": (128, 128, 128),
                              "红色": (255, 0, 0), "其他": (255, 255, 0)}
@@ -174,7 +183,8 @@ def main():
     color_stats = defaultdict(int)
 
     for tid in color_votes:
-        vtype = id_to_type.get(tid, "其他")
+        final_cls = CollectionsCounter(cls_votes[tid]).most_common(1)[0][0]
+        vtype = VEHICLE_CLASSES.get(final_cls, "其他")
         final_color = CollectionsCounter(color_votes[tid]).most_common(1)[0][0]
         type_stats[vtype] += 1
         color_stats[final_color] += 1

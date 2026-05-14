@@ -30,10 +30,10 @@
 
 | 指标 | 结果 |
 |------|------|
-| 总车流量 | **232 辆** |
-| 小汽车 / 公交车 / 卡车 | 204 / 11 / 17 |
-| 白色 / 黑色 / 红色 / 其他 | 91 / 81 / 9 / 51 |
-| 处理速度 | ~24 fps（含中文标注渲染） |
+| 总车流量 | **850 辆** |
+| 小汽车 / 公交车 / 卡车 / 其他 | 717 / 1 / 111 / 21 |
+| 白色 / 黑色 / 红色 / 其他 | 415 / 200 / 22 / 213 |
+| 处理速度 | ~36 fps（含中文标注渲染） |
 
 ---
 
@@ -467,7 +467,35 @@ VEHICLE_CLASSES = {
 
 COCO 80 类中只有这 4 个与车辆相关。其余 76 类（人、狗、椅子...）被过滤掉。
 
-### 7.4 颜色分类函数
+### 7.4 公交车误判纠正
+
+YOLOv8n 在 COCO 数据集上预训练，COCO 的车辆类别粗粒度（仅 car/bus/truck/motorcycle），没有水泥罐车、工程车等特殊车辆类别。这些车辆在特征空间中可能与公交车接近（高大的方形轮廓），导致误判。
+
+针对此问题，系统加入了**双重校验机制**：
+
+**校验 1 — 宽高比（Aspect Ratio）**：
+
+```
+公交车:  宽/高 > 2.0（横向长矩形，车身长而矮）
+水泥罐车: 宽/高 ≈ 1.0-1.5（更接近正方形）
+```
+
+当 YOLO 判定为公交车但 bbox 宽高比 < 1.7 时，几何特征不符，纠正为"其他"。
+
+**校验 2 — 置信度阈值**：
+
+非典型车辆被误判为公交车时，模型置信度通常偏低。当置信度 < 0.5 时，改判为"其他"。
+
+```python
+if cls_id == 5:  # bus
+    aspect_ratio = w / h
+    if conf < 0.5 or aspect_ratio < 1.7:
+        cls_id = 3  # 改判为"其他"
+```
+
+**类型投票机制**：与颜色识别类似，不再以首次出现的类别为准，而是收集每辆车在所有帧中的类别判定，取多数票作为最终类型。这样即使某几帧误判，最终结果也不会被锁定。
+
+### 7.5 颜色分类函数
 
 ```python
 def classify_color(roi):
@@ -516,7 +544,7 @@ def classify_color(roi):
 
 所以检测红色需要两个区间：`[0, 10]` 和 `[170, 180]`。
 
-### 7.5 中文渲染函数
+### 7.6 中文渲染函数
 
 ```python
 def draw_chinese_labels(frame, annotations, font_path, info_texts):
@@ -540,7 +568,7 @@ def draw_chinese_labels(frame, annotations, font_path, info_texts):
 
 **性能优化**：整帧只转换一次（BGR→RGB→PIL→RGB→BGR），所有文本一次性绘制，而不是每行文字转换一次。
 
-### 7.6 主循环
+### 7.7 主循环
 
 主循环的逻辑可以概括为 5 个步骤：
 
@@ -572,7 +600,7 @@ results = model.track(
 2. ByteTrack 跟踪 → 给每个框关联一个 track_id
 3. 返回带 track_id 的检测结果
 
-### 7.7 结果统计
+### 7.8 结果统计
 
 ```python
 # 对每辆被跟踪过的车：
@@ -605,7 +633,7 @@ for tid in color_votes:
 
 ### Q3: 为什么没有用到 NPU？
 
-**A**: Intel Core Ultra 7 155H 确实有 NPU，但 Ultralytics 框架的 ByteTrack 在调用 OpenVINO 时内部指定了 CPU 设备。尝试用底层 OpenVINO API 调用 NPU + 独立的 ByteTrack 实现，但跟踪效果有差距（159 vs 232 辆）。目前 CPU 模式 24 fps 对于 450 帧视频来说完全够用。
+**A**: Intel Core Ultra 7 155H 确实有 NPU，但 Ultralytics 框架的 ByteTrack 在调用 OpenVINO 时内部指定了 CPU 设备。尝试用底层 OpenVINO API 调用 NPU + 独立的 ByteTrack 实现，但跟踪效果有差距。目前 CPU 模式 36 fps 对于 2660 帧视频来说完全够用。
 
 ### Q4: 颜色识别准确吗？
 
