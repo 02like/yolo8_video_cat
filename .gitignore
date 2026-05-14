@@ -1,0 +1,16 @@
+# 视频文件（太大）
+*.mp4
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 临时文件
+*.jpg
+check_*
+
+# 下载的模型权重（可重新生成）
+yolov8n.pt
+yolo11s.pt
+yolo11n.pt
