@@ -30,10 +30,10 @@
 
 | 指标 | 结果 |
 |------|------|
-| 总车流量 | **850 辆** |
-| 小汽车 / 公交车 / 卡车 / 其他 | 717 / 1 / 111 / 21 |
-| 白色 / 黑色 / 红色 / 其他 | 415 / 200 / 22 / 213 |
-| 处理速度 | ~36 fps（含中文标注渲染） |
+| 总车流量 | **901 辆** |
+| 小汽车 / 公交车 / 卡车 / 其他 | 697 / 1 / 178 / 25 |
+| 白色 / 黑色 / 红色 / 其他颜色 | 422 / 392 / 23 / 64 |
+| 处理速度 | ~31 fps（含中文标注渲染） |
 
 ---
 
@@ -46,7 +46,7 @@
    │
    ▼
 ┌──────────────────────────────┐
-│  YOLOv8n (目标检测)           │  ← 找出每帧画面中所有车辆的位置
+│  YOLOv8s (目标检测)           │  ← 找出每帧画面中所有车辆的位置
 │  运行设备: CPU (OpenVINO 加速) │
 └──────────────┬───────────────┘
                │  检测框列表 (每辆车的位置坐标)
@@ -76,7 +76,7 @@
 - **传统方法** = 用放大镜逐行逐列扫描一张地图找房子
 - **YOLO** = 看一眼地图，一次性标出所有房子的位置
 
-**YOLOv8n** 中的 "n" 代表 **nano（纳米）**，是最小、最快的版本。系列从小到大依次是：n（nano）→ s（small）→ m（medium）→ l（large）→ x（xlarge）。nano 版精度稍低但速度最快，适合我们的场景。
+**YOLOv8s** 中的 "s" 代表 **small（小型）**。系列从小到大依次是：n（nano）→ s（small）→ m（medium）→ l（large）→ x（xlarge）。s 版本在精度和速度之间取得最佳平衡，实测比 n 版多检出 67 辆卡车，更适合交通监控场景。
 
 **COCO 数据集**：YOLOv8 在 COCO 数据集上预训练。COCO 包含 80 个常见类别，其中和车辆相关的有：
 
@@ -146,14 +146,14 @@
 
 **OpenVINO**（Open Visual Inference & Neural network Optimization，开放视觉推理和神经网络优化）是 Intel 推出的**模型推理加速工具套件**。
 
-**核心作用**：把训练好的神经网络模型转换、优化，然后在 Intel 硬件（CPU、GPU、NPU）上跑得更快。
+**核心作用**：把训练好的神经网络模型转换、优化，然后在 Intel CPU 上跑得更快。
 
 ```
-PyTorch 模型 (yolov8n.pt)
+PyTorch 模型 (yolov8s.pt)
         │
         │  export(format="openvino")
         ▼
-OpenVINO IR 模型 (yolov8n.xml + yolov8n.bin)
+OpenVINO IR 模型 (yolov8s.xml + yolov8s.bin)
         │
         │  compile_model(model, "CPU")
         ▼
@@ -164,29 +164,11 @@ OpenVINO IR 模型 (yolov8n.xml + yolov8n.bin)
 
 | | PyTorch (CPU) | OpenVINO (CPU) |
 |------|------|------|
-| 推理速度 | ~15-20 fps | ~30-35 fps |
+| 推理速度 | ~15-20 fps | ~31 fps |
 | 内存占用 | 较高 | 较低 |
 | Intel 优化 | 无 | 针对 Intel CPU 深度优化 |
 
-> **注意**：本机有 Intel Core Ultra 7 155H，内置 NPU（神经网络处理器）。理论上 OpenVINO 可以调用 NPU 进一步加速（~44 fps），但当前使用的 Ultralytics ByteTrack 管线无法直接调用 Intel NPU，因此实际工作于 CPU 模式。
-
-### 2.5 什么是 NPU？
-
-**NPU**（Neural Processing Unit，神经网络处理器）是专门为 AI 推理设计的硬件加速器。
-
-| 处理器类型 | 擅长 | 类比 |
-|------|------|------|
-| CPU | 通用计算，串行任务 | 瑞士军刀 — 什么都能做 |
-| GPU | 并行计算，图形渲染 | 1000 个小学生同时做简单加减法 |
-| NPU | AI 推理（矩阵运算） | 专用计算器 — 只做乘法，但做得极快 |
-
-Intel Core Ultra 7 155H 内置的 NPU 专门优化了神经网络中最常见的操作（卷积、矩阵乘法），功耗远低于 GPU 但速度远快于 CPU。
-
-**本项目为什么最终没用到 NPU？**
-
-Ultralytics 框架的 ByteTrack 在调用 OpenVINO 时，内部选择设备为 CPU，没有暴露切换 NPU 的接口。我们尝试过用底层 OpenVINO API 指定 NPU + 独立 ByteTrack 库，但效果有差距（159 vs 232 辆车）。权衡之下，选择 CPU + 完整 ByteTrack 以获得更准确的跟踪结果。
-
-### 2.6 什么是 HSV 颜色空间？
+### 2.5 什么是 HSV 颜色空间？
 
 **为什么不用 RGB？** RGB（红绿蓝）是给显示器用的，不是给人眼用的。同一个颜色在不同光照下，RGB 值差异巨大。
 
@@ -206,7 +188,7 @@ Ultralytics 框架的 ByteTrack 在调用 OpenVINO 时，内部选择设备为 C
 
 ```
 白色: S < 45 且 V > 150（低饱和度 + 高亮度）
-黑色: V < 80（亮度很低）
+黑色: S < 60 且 V < 110（低饱和度 + 低亮度，排除深蓝/深绿等彩色）
 红色: H ∈ [0,10] 或 [170,180]，且 S > 50
 其他: 以上都不满足
 ```
@@ -219,7 +201,7 @@ Ultralytics 框架的 ByteTrack 在调用 OpenVINO 时，内部选择设备为 C
 
 | 项目 | 最低要求 | 推荐配置 |
 |------|---------|---------|
-| CPU | Intel/AMD 任何型号 | Intel Core Ultra（有 NPU） |
+| CPU | Intel/AMD 任何型号 | Intel Core i5 或更高 |
 | 内存 | 8 GB | 16 GB |
 | 硬盘 | 2 GB 空闲 | 5 GB 空闲 |
 
@@ -253,9 +235,9 @@ pip install openvino
 项目目录/
 ├── main.py                     # 【主程序】运行这个即可
 ├── export_model.py             # 【预处理脚本】只需运行一次，导出模型
-├── yolov8n_openvino_model/     # 【模型目录】导出后的 OpenVINO 模型
-│   ├── yolov8n.xml             #   模型结构（网络层定义）
-│   ├── yolov8n.bin             #   模型权重（训练好的参数）
+├── yolov8s_openvino_model/     # 【模型目录】导出后的 OpenVINO 模型
+│   ├── yolov8s.xml             #   模型结构（网络层定义）
+│   ├── yolov8s.bin             #   模型权重（训练好的参数）
 │   └── metadata.yaml           #   元数据
 ├── 4月22日.mp4                 # 【输入】原始交通监控视频
 ├── output_annotated.mp4        # 【输出】标注后的视频（运行后生成）
@@ -273,11 +255,11 @@ python export_model.py
 ```
 
 这一步会：
-1. 从网络下载 YOLOv8n 预训练权重（约 6 MB）
+1. 从网络下载 YOLOv8s 预训练权重（约 21 MB）
 2. 将其转换为 OpenVINO IR 格式
-3. 保存到 `yolov8n_openvino_model/` 目录
+3. 保存到 `yolov8s_openvino_model/` 目录
 
-如果网络不通，可以手动下载 `yolov8n.pt` 放到项目目录后再运行。
+如果网络不通，可以手动下载 `yolov8s.pt` 放到项目目录后再运行。
 
 ### 第二步：运行分析
 
@@ -313,7 +295,7 @@ python main.py
 │                  每一帧的处理                      │
 │                                                    │
 │  1. YOLO 检测 (model.track)                       │
-│     输入: 一帧画面 (854×480 BGR)                   │
+│     输入: 一帧画面 (852×480 BGR)                   │
 │     输出: 所有车辆的位置框 + 类别 + 置信度          │
 │                                                    │
 │  2. ByteTrack 跟踪 (内置于 model.track)            │
@@ -442,7 +424,7 @@ import time                   # 计时
 ### 7.2 配置参数
 
 ```python
-MODEL_PATH = "yolov8n_openvino_model/"  # 模型路径
+MODEL_PATH = "yolov8s_openvino_model/"  # 模型路径
 VIDEO_PATH = "4月22日.mp4"              # 输入视频
 OUTPUT_VIDEO = "output_annotated.mp4"   # 输出视频
 CONF_THRESH = 0.25  # 置信度阈值：低于此值的检测框被丢弃
@@ -469,7 +451,7 @@ COCO 80 类中只有这 4 个与车辆相关。其余 76 类（人、狗、椅�
 
 ### 7.4 公交车误判纠正
 
-YOLOv8n 在 COCO 数据集上预训练，COCO 的车辆类别粗粒度（仅 car/bus/truck/motorcycle），没有水泥罐车、工程车等特殊车辆类别。这些车辆在特征空间中可能与公交车接近（高大的方形轮廓），导致误判。
+YOLOv8s 在 COCO 数据集上预训练，COCO 的车辆类别粗粒度（仅 car/bus/truck/motorcycle），没有水泥罐车、工程车等特殊车辆类别。这些车辆在特征空间中可能与公交车接近（高大的方形轮廓），导致误判。
 
 针对此问题，系统加入了**双重校验机制**：
 
@@ -514,19 +496,21 @@ def classify_color(roi):
     # 3. 创建颜色掩码并计算占比
     total = crop.shape[0] * crop.shape[1]
 
-    white = cv2.inRange(crop, np.array([0, 0, 150]),  np.array([180, 45, 255]))
-    black = cv2.inRange(crop, np.array([0, 0, 0]),    np.array([180, 255, 80]))
-    red1  = cv2.inRange(crop, np.array([0, 50, 50]),  np.array([10, 255, 255]))
-    red2  = cv2.inRange(crop, np.array([170, 50, 50]), np.array([180, 255, 255]))
+    white = cv2.inRange(crop, np.array([0, 0, 150]), np.array([180, 45, 255]))
+    black = cv2.inRange(crop, np.array([0, 0, 0]), np.array([180, 60, 110]))
+    red1 = cv2.inRange(crop, np.array([0, 50, 50]), np.array([10, 255, 255]))
+    red2 = cv2.inRange(crop, np.array([170, 50, 50]), np.array([180, 255, 255]))
 
     w_ratio = np.count_nonzero(white) / total
     b_ratio = np.count_nonzero(black) / total
     r_ratio = (np.count_nonzero(red1) + np.count_nonzero(red2)) / total
 
-    # 4. 按特异度从高到低判断（红色最特异，白色最普遍）
-    if r_ratio > 0.25:   return "红色"
-    if b_ratio > 0.4:    return "黑色"
-    if w_ratio > 0.3:    return "白色"
+    if r_ratio > 0.2:
+        return "红色"
+    if b_ratio > 0.25:
+        return "黑色"
+    if w_ratio > 0.25:
+        return "白色"
     return "其他"
 ```
 
@@ -631,17 +615,20 @@ for tid in color_votes:
 
 **A**: OpenCV 的 `putText` 不支持中文。v3 版本改用 Pillow + 系统字体（微软雅黑）渲染中文，已修复。
 
-### Q3: 为什么没有用到 NPU？
+### Q3: 颜色识别准确吗？
 
-**A**: Intel Core Ultra 7 155H 确实有 NPU，但 Ultralytics 框架的 ByteTrack 在调用 OpenVINO 时内部指定了 CPU 设备。尝试用底层 OpenVINO API 调用 NPU + 独立的 ByteTrack 实现，但跟踪效果有差距。目前 CPU 模式 36 fps 对于 2660 帧视频来说完全够用。
-
-### Q4: 颜色识别准确吗？
-
-**A**: 有一定的局限性：
+**A**: 经过调优后的颜色分类已有明显改善，但仍有一定的局限性：
 - 银色/灰色车辆会被判定为"白色"（低饱和度 + 中等亮度）
 - 深蓝/深灰可能被判为"黑色"
 - 黄昏/阴天等极端光照下准确率下降
 - 颜色投票机制可以在一定程度上纠正单帧误判
+
+### Q4: 为什么选 YOLOv8s 而不是 YOLOv8n 或 YOLOv8m？
+
+**A**: 经过三轮对比测试：
+- YOLOv8n：速度最快（39 fps），但漏检较多卡车（仅 111 辆）
+- YOLOv8s：检测最全（901 辆，卡车 178 辆），速度 31 fps 完全够用
+- YOLOv8m：反而检出最少（719 辆），速度最慢（23 fps），大模型在 COCO 上的置信度校准反而导致漏检
 
 ### Q5: 能处理其他视频吗？
 
@@ -651,9 +638,9 @@ for tid in color_votes:
 
 ## 9. 扩展方向
 
-### 9.1 改用更大模型提高检测精度
+### 9.1 尝试其他模型
 
-将 `export_model.py` 中的 `yolov8n.pt` 改为 `yolov8s.pt` 或 `yolov8m.pt`，检测更准但速度更慢。
+将 `export_model.py` 中的 `yolov8s.pt` 改为 `yolov8m.pt` 或 `yolov8l.pt`。但实测 m 模型效果反而不佳（见 Q4），建议保持当前 s 模型。
 
 ### 9.2 添加车牌识别
 
@@ -684,7 +671,7 @@ for tid in color_votes:
 | 颜色 | H 最小值 | H 最大值 | S 最小值 | S 最大值 | V 最小值 | V 最大值 |
 |------|---------|---------|---------|---------|---------|---------|
 | 白色 | 0 | 180 | 0 | 45 | 150 | 255 |
-| 黑色 | 0 | 180 | 0 | 255 | 0 | 80 |
+| 黑色 | 0 | 180 | 0 | 60 | 0 | 110 |
 | 红色 (1) | 0 | 10 | 50 | 255 | 50 | 255 |
 | 红色 (2) | 170 | 180 | 50 | 255 | 50 | 255 |
 

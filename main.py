@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 import time
 
 # ==================== 配置 ====================
-MODEL_PATH = "yolov8n_openvino_model/"
+MODEL_PATH = "yolov8s_openvino_model/"
 VIDEO_PATH = "4月22日.mp4"
 OUTPUT_VIDEO = "output_annotated.mp4"
 CONF_THRESH = 0.25
@@ -63,8 +63,10 @@ def classify_color(roi):
         return "其他"
     total = crop.shape[0] * crop.shape[1]
 
+    # 白色: 低饱和度 + 高亮度
     white = cv2.inRange(crop, np.array([0, 0, 150]), np.array([180, 45, 255]))
-    black = cv2.inRange(crop, np.array([0, 0, 0]), np.array([180, 255, 80]))
+    # 黑色: 低饱和度(S<60) + 低亮度(V<110)，加 S 约束排除深蓝/深绿等彩色
+    black = cv2.inRange(crop, np.array([0, 0, 0]), np.array([180, 60, 110]))
     red1 = cv2.inRange(crop, np.array([0, 50, 50]), np.array([10, 255, 255]))
     red2 = cv2.inRange(crop, np.array([170, 50, 50]), np.array([180, 255, 255]))
 
@@ -72,11 +74,11 @@ def classify_color(roi):
     b_ratio = np.count_nonzero(black) / total
     r_ratio = (np.count_nonzero(red1) + np.count_nonzero(red2)) / total
 
-    if r_ratio > 0.25:
+    if r_ratio > 0.2:
         return "红色"
-    if b_ratio > 0.4:
+    if b_ratio > 0.25:
         return "黑色"
-    if w_ratio > 0.3:
+    if w_ratio > 0.25:
         return "白色"
     return "其他"
 
