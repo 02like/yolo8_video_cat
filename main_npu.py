@@ -1,6 +1,6 @@
 """
 交通监控视频智能分析系统 — NPU 版本
-YOLOv8n 推理 → Intel NPU（OpenVINO）
+YOLOv8s 推理 → Intel NPU（OpenVINO）
 ByteTrack 跟踪 → Ultralytics（独立调用）
 """
 import cv2

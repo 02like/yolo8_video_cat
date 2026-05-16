@@ -1,7 +1,7 @@
 """
 交通监控视频智能分析系统
 功能: 车流量统计、车辆颜色识别、车辆类型分类
-检测 + 跟踪: YOLOv8n + ByteTrack (Ultralytics)
+检测 + 跟踪: YOLOv8s + ByteTrack (Ultralytics)
 """
 import cv2
 import numpy as np
@@ -102,7 +102,7 @@ def main():
     color_votes = defaultdict(list)
     cls_votes = defaultdict(list)  # 类型投票，纠正偶发误判
 
-    print(f"检测 + 跟踪: YOLOv8n + ByteTrack (Ultralytics)")
+    print(f"检测 + 跟踪: YOLOv8s + ByteTrack (Ultralytics)")
     print(f"视频: {VIDEO_PATH}")
     print(f"分辨率: {frame_w}x{frame_h}, {total_frames} 帧, {fps:.0f} fps")
 
@@ -159,7 +159,7 @@ def main():
         # 批量绘制中文标注（整帧只做一次 PIL 转换）
         info = [
             (f"累计车辆: {len(color_votes)}", (10, 8), (0, 255, 255), 18),
-            ("YOLOv8n + ByteTrack", (10, 34), (0, 255, 255), 13),
+            ("YOLOv8s + ByteTrack", (10, 34), (0, 255, 255), 13),
         ]
         draw_chinese_labels(frame, annotations, FONT_PATH, info)
 

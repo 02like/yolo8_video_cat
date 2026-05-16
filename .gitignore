@@ -12,8 +12,9 @@ check_*
 
 # 下载的模型权重（可重新生成）
 yolov8n.pt
-yolo11s.pt
-yolo11n.pt
+yolov8s.pt
+yolov8m.pt
+yolov8m_openvino_model/
 
 # IDE
 .idea/

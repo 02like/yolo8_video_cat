@@ -35,6 +35,8 @@
 | 白色 / 黑色 / 红色 / 其他颜色 | 422 / 392 / 23 / 64 |
 | 处理速度 | ~31 fps（含中文标注渲染） |
 
+> **NPU 版本**（`main_npu.py`）：在 Intel NPU 上总车流量 906 辆（700 / 1 / 179 / 26），颜色 425 / 396 / 22 / 63。两版差异约 0.5%，属正常浮动。
+
 ---
 
 ## 2. 技术栈介绍
@@ -220,11 +222,11 @@ OpenVINO IR 模型 (yolov8s.xml + yolov8s.bin)
 ### 3.3 安装命令
 
 ```bash
-# 核心依赖
-pip install ultralytics opencv-python openvino pillow numpy scipy
+# 一键安装所有依赖
+pip install -r requirements.txt
 
-# 如果 ultralytics 未自动安装 openvino，手动安装
-pip install openvino
+# 或者手动逐条安装
+pip install ultralytics opencv-python openvino pillow numpy scipy
 ```
 
 ---
@@ -233,15 +235,16 @@ pip install openvino
 
 ```
 项目目录/
-├── main.py                     # 【主程序】运行这个即可
+├── main.py                     # 【主程序】CPU 版（OpenVINO 加速），运行这个即可
+├── main_npu.py                 # 【NPU 版】手动推理 + ByteTrack，可在 Intel NPU 上运行
 ├── export_model.py             # 【预处理脚本】只需运行一次，导出模型
 ├── yolov8s_openvino_model/     # 【模型目录】导出后的 OpenVINO 模型
 │   ├── yolov8s.xml             #   模型结构（网络层定义）
 │   ├── yolov8s.bin             #   模型权重（训练好的参数）
 │   └── metadata.yaml           #   元数据
+├── requirements.txt            # Python 依赖列表
 ├── 4月22日.mp4                 # 【输入】原始交通监控视频
-├── output_annotated.mp4        # 【输出】标注后的视频（运行后生成）
-└── 要求.txt                    # 项目需求文档
+└── output_annotated.mp4        # 【输出】标注后的视频（运行后生成）
 ```
 
 ---
@@ -274,6 +277,8 @@ python main.py
 进度: 200/450 (44.4%), 速度: 24.3 fps, 累计唯一ID: 105, 预计剩余: 11s
 ...
 ```
+
+> **NPU 版本**：如果你的机器有 Intel NPU（如 Core Ultra），可以运行 `python main_npu.py`，它将 YOLO 推理和 ByteTrack 跟踪分离，使检测部分直接跑在 NPU 上。修改 `main_npu.py` 中的 `DEVICE` 变量可在 `"NPU"` 和 `"CPU"` 之间切换对比。
 
 ### 第三步：查看结果
 
