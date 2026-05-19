@@ -30,10 +30,10 @@
 
 | 指标 | 结果 |
 |------|------|
-| 总车流量 | **901 辆** |
-| 小汽车 / 公交车 / 卡车 / 其他 | 697 / 1 / 178 / 25 |
-| 白色 / 黑色 / 红色 / 其他颜色 | 422 / 392 / 23 / 64 |
-| 处理速度 | ~31 fps（含中文标注渲染） |
+| 总车流量 | **939 辆** |
+| 小汽车 / 公交车 / 卡车 / 其他 | 748 / 1 / 170 / 20 |
+| 白色 / 黑色 / 红色 / 其他颜色 | 450 / 386 / 26 / 77 |
+| 处理速度 | ~18 fps（1920×1080 分辨率，OpenVINO GPU） |
 
 ---
 
@@ -47,7 +47,7 @@
    ▼
 ┌──────────────────────────────┐
 │  YOLOv8s (目标检测)           │  ← 找出每帧画面中所有车辆的位置
-│  运行设备: CPU (OpenVINO 加速) │
+│  运行设备: GPU (Arc iGPU)       │
 └──────────────┬───────────────┘
                │  检测框列表 (每辆车的位置坐标)
                ▼
@@ -162,11 +162,12 @@ OpenVINO IR 模型 (yolov8s.xml + yolov8s.bin)
 
 **为什么用 OpenVINO 而不是直接用 PyTorch？**
 
-| | PyTorch (CPU) | OpenVINO (CPU) |
+| | OpenVINO (CPU) | OpenVINO (GPU) |
 |------|------|------|
-| 推理速度 | ~15-20 fps | ~31 fps |
-| 内存占用 | 较高 | 较低 |
-| Intel 优化 | 无 | 针对 Intel CPU 深度优化 |
+| 推理设备 | Intel Core Ultra 7 155H | Intel Arc Graphics (iGPU) |
+| 推理速度（1920×1080 完整管线） | ~13 fps | ~18 fps |
+| 纯推理速度（640×640） | ~15 fps | ~47 fps |
+| 适用场景 | 无独立显卡的通用场景 | Intel 核显平台最优选择 |
 
 ### 2.5 什么是 HSV 颜色空间？
 
@@ -233,8 +234,9 @@ pip install ultralytics opencv-python openvino pillow numpy scipy
 
 ```
 项目目录/
-├── main.py                     # 【主程序】OpenVINO 加速，运行这个即可
+├── main.py                     # 【主程序】运行这个即可
 ├── export_model.py             # 【预处理脚本】只需运行一次，导出模型
+├── benchmark_device.py         # 【设备基准测试】对比 CPU/GPU/NPU 性能
 ├── yolov8s_openvino_model/     # 【模型目录】导出后的 OpenVINO 模型
 │   ├── yolov8s.xml             #   模型结构（网络层定义）
 │   ├── yolov8s.bin             #   模型权重（训练好的参数）
@@ -270,8 +272,8 @@ python main.py
 运行过程中会打印进度：
 
 ```
-进度: 100/450 (22.2%), 速度: 24.0 fps, 累计唯一ID: 69, 预计剩余: 17s
-进度: 200/450 (44.4%), 速度: 24.3 fps, 累计唯一ID: 105, 预计剩余: 11s
+进度: 100/2660 (3.8%), 速度: 15.3 fps, 累计唯一ID: 62, 预计剩余: 168s
+进度: 200/2660 (7.5%), 速度: 16.5 fps, 累计唯一ID: 92, 预计剩余: 149s
 ...
 ```
 
@@ -294,8 +296,8 @@ python main.py
 ┌──────────────────────────────────────────────────┐
 │                  每一帧的处理                      │
 │                                                    │
-│  1. YOLO 检测 (model.track)                       │
-│     输入: 一帧画面 (852×480 BGR)                   │
+│  1. YOLO 检测 (model.track, device="intel:GPU")   │
+│     输入: 一帧画面 (1920×1080 BGR)                   │
 │     输出: 所有车辆的位置框 + 类别 + 置信度          │
 │                                                    │
 │  2. ByteTrack 跟踪 (内置于 model.track)            │
@@ -428,6 +430,7 @@ MODEL_PATH = "yolov8s_openvino_model/"  # 模型路径
 VIDEO_PATH = "4月22日.mp4"              # 输入视频
 OUTPUT_VIDEO = "output_annotated.mp4"   # 输出视频
 CONF_THRESH = 0.25  # 置信度阈值：低于此值的检测框被丢弃
+DEVICE = "intel:GPU"  # 推理设备：CPU / intel:GPU / intel:NPU
 FONT_PATH = "C:/Windows/Fonts/msyh.ttc" # 微软雅黑字体
 ```
 
@@ -575,6 +578,7 @@ results = model.track(
     tracker='bytetrack.yaml',     # 使用 ByteTrack
     conf=CONF_THRESH,             # 置信度阈值
     classes=[2, 5, 7],           # 只检测车辆
+    device=DEVICE,                # 推理设备：intel:GPU / CPU / intel:NPU
     verbose=False                 # 不打印调试信息
 )
 ```
@@ -627,12 +631,33 @@ for tid in color_votes:
 
 **A**: 经过三轮对比测试：
 - YOLOv8n：速度最快（39 fps），但漏检较多卡车（仅 111 辆）
-- YOLOv8s：检测最全（901 辆，卡车 178 辆）
+- YOLOv8s：检测最全（939 辆，卡车 170 辆）
 - YOLOv8m：检出最少（719 辆），速度最慢（23 fps），大模型在 COCO 上的置信度校准导致漏检
 
 ### Q5: 能处理其他视频吗？
 
 **A**: 可以。将新视频放入项目目录，修改 `main.py` 中的 `VIDEO_PATH` 变量指向新视频即可。只要视频中有车辆（car/bus/truck），无需重新训练。
+
+### Q6: 如何切换推理设备（CPU / GPU / NPU）？
+
+**A**: 修改 `main.py` 中的 `DEVICE` 变量：
+
+```python
+DEVICE = "intel:GPU"   # Intel Arc iGPU（本项目默认，~18 fps）
+DEVICE = "CPU"         # 纯 CPU 推理（~13 fps）
+DEVICE = "intel:NPU"   # Intel AI Boost NPU（~21 fps 小规模测试）
+```
+
+实测数据（完整管线，300 帧基准测试）：
+
+| 设备 | 完整管线 fps | 纯推理 fps | 说明 |
+|------|------------|-----------|------|
+| GPU (Arc iGPU) | **30.2** | 47.2 | 速度最快，推荐 |
+| CPU (OpenVINO AUTO) | 28.0 | 14.8 | 默认模式，自动借用 GPU |
+| NPU (AI Boost) | 21.8 | 40.8 | 低功耗场景适用 |
+| CPU (纯) | 11.7 | 14.8 | 显式指定 CPU，最慢 |
+
+注意：完整管线 fps 包含视频解码、ByteTrack 跟踪、颜色分类和中文渲染开销，300 帧小规模测试的 fps 高于全量 2660 帧（ByteTrack 跟踪器状态随帧数增加而变重）。
 
 ---
 
@@ -644,7 +669,7 @@ for tid in color_votes:
 
 ### 9.2 添加车牌识别
 
-如果视频分辨率足够高（1080P+），可以在车辆检测框内再加一个车牌检测 + OCR（光学字符识别）模块。当前视频 854×480，车辆太远，车牌不可辨识。
+如果视频分辨率足够高（1080P+），可以在车辆检测框内再加一个车牌检测 + OCR（光学字符识别）模块。当前视频 1920×1080，但部分车辆距离较远，车牌仍难以辨识。
 
 ### 9.3 添加速度估计
 

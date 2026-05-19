@@ -15,6 +15,7 @@ MODEL_PATH = "yolov8s_openvino_model/"
 VIDEO_PATH = "4月22日.mp4"
 OUTPUT_VIDEO = "output_annotated.mp4"
 CONF_THRESH = 0.25
+DEVICE = "intel:GPU"  # OpenVINO 推理设备 (CPU / intel:GPU / intel:NPU)
 FONT_PATH = "C:/Windows/Fonts/msyh.ttc"
 # ==============================================
 
@@ -116,7 +117,8 @@ def main():
 
         results = model.track(
             frame, persist=True, tracker='bytetrack.yaml',
-            conf=CONF_THRESH, classes=[2, 5, 7], verbose=False
+            conf=CONF_THRESH, classes=[2, 5, 7], device=DEVICE,
+            verbose=False
         )
 
         # 收集本帧所有标注
